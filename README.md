@@ -65,10 +65,10 @@ The tests cover chunker boundaries/overlap/line metadata, embedder determinism a
 <!-- builder:roadmap:start -->
 ## Status
 
-**In active development:** 0 of 2 milestones done.
+**In active development:** 1 of 2 milestones done.
 
 ## Roadmap
 
-- [ ] **Ingest & retrieve pipeline**: Markdown/text chunker (heading-aware, fixed-size with overlap, source line metadata), hashing-trick embedder (token n-grams hashed into a fixed-dim L2-normalized vector, no network), cosine-similarity brute-force vector index serialized to index.json, plus `lantern ingest <dir>` and `lantern query <text> -k 5` CLI commands. Unit tests for chunker boundaries, embedder determinism/normalization, and index recall on a fixture corpus; runnable end-to-end on day 1.
+- [x] **Ingest & retrieve pipeline**: Markdown/text chunker (heading-aware, fixed-size with overlap, source line metadata), hashing-trick embedder (token n-grams hashed into a fixed-dim L2-normalized vector, no network), cosine-similarity brute-force vector index serialized to index.json, plus `lantern ingest <dir>` and `lantern query <text> -k 5` CLI commands. Unit tests for chunker boundaries, embedder determinism/normalization, and index recall on a fixture corpus; runnable end-to-end on day 1.
 - [ ] **Chat with citations + offline eval harness**: LLMProvider interface with a deterministic extractive MockProvider (default, composes answers from retrieved chunks) and an optional real HTTP provider enabled only via env vars; `lantern chat` REPL with conversation history and [n] citation formatting that resolves to file:line ranges; JSONL eval harness over a bundled QA set computing recall@k and grounded-answer metrics with a mock judge, emitting a markdown report. Tests for citation resolution, provider fallback, and eval metrics.
 <!-- builder:roadmap:end -->
