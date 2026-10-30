@@ -110,10 +110,17 @@ The tests cover chunker boundaries/overlap/line metadata, embedder determinism a
 <!-- builder:roadmap:start -->
 ## Status
 
-**In active development:** 1 of 2 milestones done.
+**Complete.** Lantern is a finished offline-first RAG CLI that chunks docs with heading-aware splitting, retrieves via a from-scratch hashing-trick vector index, and chats with [n] citations mapped to file:line ranges using a deterministic mock LLM by default. The bundled JSONL eval harness reports recall@3 and grounded-answer scores as a markdown report, and the entire suite runs with zero network calls and zero API keys.
 
 ## Roadmap
 
 - [x] **Ingest & retrieve pipeline**: Markdown/text chunker (heading-aware, fixed-size with overlap, source line metadata), hashing-trick embedder (token n-grams hashed into a fixed-dim L2-normalized vector, no network), cosine-similarity brute-force vector index serialized to index.json, plus `lantern ingest <dir>` and `lantern query <text> -k 5` CLI commands. Unit tests for chunker boundaries, embedder determinism/normalization, and index recall on a fixture corpus; runnable end-to-end on day 1.
-- [ ] **Chat with citations + offline eval harness**: LLMProvider interface with a deterministic extractive MockProvider (default, composes answers from retrieved chunks) and an optional real HTTP provider enabled only via env vars; `lantern chat` REPL with conversation history and [n] citation formatting that resolves to file:line ranges; JSONL eval harness over a bundled QA set computing recall@k and grounded-answer metrics with a mock judge, emitting a markdown report. Tests for citation resolution, provider fallback, and eval metrics.
+- [x] **Chat with citations + offline eval harness**: LLMProvider interface with a deterministic extractive MockProvider (default, composes answers from retrieved chunks) and an optional real HTTP provider enabled only via env vars; `lantern chat` REPL with conversation history and [n] citation formatting that resolves to file:line ranges; JSONL eval harness over a bundled QA set computing recall@k and grounded-answer metrics with a mock judge, emitting a markdown report. Tests for citation resolution, provider fallback, and eval metrics.
+
+## Ideas for future work
+
+- Add PDF and HTML ingestion adapters
+- Implement streaming responses for the env-gated HTTP provider
+- Expand the QA eval set and add precision@k plus latency metrics
+- Package as a standalone binary with pkg or bun compile
 <!-- builder:roadmap:end -->
