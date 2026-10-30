@@ -48,6 +48,16 @@ export class VectorIndex {
     return scored.slice(0, Math.max(0, k));
   }
 
+  /** Look up a chunk by its stable id; undefined when absent. */
+  findById(id: string): IndexedChunk | undefined {
+    return this.chunks.find((chunk) => chunk.id === id);
+  }
+
+  /** Look up the chunk that starts at `startLine` of `file`; undefined when absent. */
+  findByFileLine(file: string, startLine: number): IndexedChunk | undefined {
+    return this.chunks.find((chunk) => chunk.file === file && chunk.startLine === startLine);
+  }
+
   /** Serialize to the on-disk {@link LanternIndex} schema. */
   toJSON(): LanternIndex {
     return {

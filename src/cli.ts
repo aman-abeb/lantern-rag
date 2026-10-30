@@ -1,9 +1,13 @@
 #!/usr/bin/env node
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import { pathToFileURL } from 'node:url';
+import { ChatSession, handleChatLine } from './chat.js';
 import { chunkText } from './chunker.js';
 import { EMBEDDING_DIM, embed } from './embedder.js';
+import { DEFAULT_EVAL_K, loadQAFile, renderMarkdownReport, runEval } from './eval.js';
+import { resolveProvider } from './provider.js';
 import type { SearchResult } from './types.js';
 import { VectorIndex } from './vector-index.js';
 
@@ -11,17 +15,23 @@ import { VectorIndex } from './vector-index.js';
 const TEXT_EXTENSIONS = new Set(['.md', '.markdown', '.txt']);
 const DEFAULT_INDEX_PATH = 'index.json';
 const DEFAULT_TOP_K = 5;
+const DEFAULT_QA_PATH = 'eval/qa.jsonl';
 
 const USAGE = `Lantern — offline-first RAG CLI
 
 Usage:
-  lantern ingest <dir> [--index <path>]           Chunk, embed, and index a directory of docs
-  lantern query <text> [-k <n>] [--index <path>]  Retrieve the top-k chunks for a query
-  lantern help                                    Show this message
+  lantern ingest <dir> [--index <path>]                    Chunk, embed, and index a directory of docs
+  lantern query <text> [-k <n>] [--index <path>]           Retrieve the top-k chunks for a query
+  lantern chat [-k <n>] [--index <path>]                   Chat REPL with [n] citations (file:line sources)
+  lantern eval [-k <n>] [--index <path>] [--qa <path>] [--report <path>]
+                                                           Run the JSONL QA set and print a markdown report
+  lantern help                                             Show this message
 
 Options:
-  -k, --top-k <n>  Number of chunks to return (default: ${DEFAULT_TOP_K})
-  --index <path>   Index file path (default: ${DEFAULT_INDEX_PATH})
+  -k, --top-k <n>   Number of chunks to retrieve (default: ${DEFAULT_TOP_K}; ${DEFAULT_EVAL_K} for eval)
+  --index <path>    Index file path (default: ${DEFAULT_INDEX_PATH})
+  --qa <path>       QA set for eval (default: ${DEFAULT_QA_PATH})
+  --report <path>   Also write the eval markdown report to this file
 `;
 
 /**
@@ -88,13 +98,17 @@ interface ParsedArgs {
   positional: string[];
   k: number;
   index: string;
+  qa: string;
+  report?: string;
 }
 
-/** Parse `-k/--top-k` and `--index` flags; everything else is positional. */
-function parseArgs(args: string[]): ParsedArgs {
+/** Parse `-k/--top-k`, `--index`, `--qa`, and `--report` flags; everything else is positional. */
+function parseArgs(args: string[], defaultK: number = DEFAULT_TOP_K): ParsedArgs {
   const positional: string[] = [];
-  let k = DEFAULT_TOP_K;
+  let k = defaultK;
   let index = DEFAULT_INDEX_PATH;
+  let qa = DEFAULT_QA_PATH;
+  let report: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '-k' || arg === '--top-k') {
@@ -108,17 +122,42 @@ function parseArgs(args: string[]): ParsedArgs {
       const value = args[++i];
       if (value === undefined) throw new Error('--index requires a file path');
       index = value;
+    } else if (arg === '--qa') {
+      const value = args[++i];
+      if (value === undefined) throw new Error('--qa requires a file path');
+      qa = value;
+    } else if (arg === '--report') {
+      const value = args[++i];
+      if (value === undefined) throw new Error('--report requires a file path');
+      report = value;
     } else if (arg.startsWith('-') && arg !== '-') {
       throw new Error(`Unknown flag: ${arg}`);
     } else {
       positional.push(arg);
     }
   }
-  return { positional, k, index };
+  return { positional, k, index, qa, report };
+}
+
+/** Run the interactive chat REPL over stdin until `/quit` or EOF. */
+async function runChatRepl(indexPath: string, k: number): Promise<void> {
+  const provider = resolveProvider();
+  const session = new ChatSession({ index: VectorIndex.load(indexPath), provider, topK: k });
+  console.log(`Lantern chat — provider: ${provider.name}, index: ${indexPath} (type /quit or Ctrl-D to exit)`);
+  const interactive = process.stdin.isTTY === true;
+  const rl = createInterface({ input: process.stdin, output: process.stdout, prompt: '> ' });
+  if (interactive) rl.prompt();
+  for await (const line of rl) {
+    const output = await handleChatLine(session, line);
+    if (output === null) break;
+    if (output.length > 0) console.log(output);
+    if (interactive) rl.prompt();
+  }
+  rl.close();
 }
 
 /** CLI entry point. Returns the process exit code. */
-export function main(argv: string[] = process.argv.slice(2)): number {
+export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
   const [command, ...rest] = argv;
   try {
     if (command === 'ingest') {
@@ -158,6 +197,40 @@ export function main(argv: string[] = process.argv.slice(2)): number {
       }
       return 0;
     }
+    if (command === 'chat') {
+      const { k, index } = parseArgs(rest);
+      if (!existsSync(index)) {
+        console.error(`Index not found: ${index} (run 'lantern ingest <dir>' first)`);
+        return 1;
+      }
+      await runChatRepl(index, k);
+      return 0;
+    }
+    if (command === 'eval') {
+      const { k, index, qa, report } = parseArgs(rest, DEFAULT_EVAL_K);
+      if (!existsSync(index)) {
+        console.error(`Index not found: ${index} (run 'lantern ingest <dir>' first)`);
+        return 1;
+      }
+      if (!existsSync(qa)) {
+        console.error(`QA file not found: ${qa}`);
+        return 1;
+      }
+      const items = loadQAFile(qa);
+      if (items.length === 0) {
+        console.error(`QA file has no questions: ${qa}`);
+        return 1;
+      }
+      const provider = resolveProvider();
+      const evalReport = await runEval(VectorIndex.load(index), provider, items, k);
+      const markdown = renderMarkdownReport(evalReport);
+      if (report !== undefined) {
+        writeFileSync(report, markdown, 'utf8');
+        console.error(`Report written to ${report}`);
+      }
+      console.log(markdown);
+      return 0;
+    }
     console.log(USAGE);
     return command === undefined || command === 'help' || command === '--help' || command === '-h' ? 0 : 1;
   } catch (error) {
@@ -168,5 +241,5 @@ export function main(argv: string[] = process.argv.slice(2)): number {
 
 const invokedAsScript = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (invokedAsScript) {
-  process.exit(main());
+  process.exit(await main());
 }

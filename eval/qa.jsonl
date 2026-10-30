@@ -1,0 +1,7 @@
+# Lantern QA set — one JSON object per line: id, question, gold chunk refs ("file:startLine" or chunk id).
+{"id": "q1", "question": "How does the embedder turn text into a vector?", "gold": ["test/fixtures/sample.md:19"]}
+{"id": "q2", "question": "What source metadata does every chunk record?", "gold": ["test/fixtures/sample.md:8"]}
+{"id": "q3", "question": "How does the vector index rank chunks for a query?", "gold": ["test/fixtures/sample.md:27"]}
+{"id": "q4", "question": "Why does Lantern avoid neural embedding models?", "gold": ["test/fixtures/sample.md:34"]}
+{"id": "q5", "question": "What does the day-two roadmap add?", "gold": ["test/fixtures/sample.md:41"]}
+{"id": "q6", "question": "What does lantern ingest do with a directory of docs?", "gold": ["test/fixtures/sample.md:8"]}

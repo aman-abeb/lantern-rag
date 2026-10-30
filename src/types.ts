@@ -38,3 +38,51 @@ export interface LanternIndex {
   createdAt: string;
   chunks: IndexedChunk[];
 }
+
+/** Role of a message in a chat conversation. */
+export type ChatRole = 'user' | 'assistant' | 'system';
+
+/** A single message in a chat conversation. */
+export interface ChatMessage {
+  role: ChatRole;
+  /** Message text. */
+  content: string;
+}
+
+/** A `[n]` citation marker resolved to the source chunk it refers to. */
+export interface Citation {
+  /** 1-based citation number as printed in the answer text. */
+  n: number;
+  /** Stable id of the cited chunk. */
+  chunkId: string;
+  /** Source file of the cited chunk. */
+  file: string;
+  /** 1-based first line of the cited chunk (inclusive). */
+  startLine: number;
+  /** 1-based last line of the cited chunk (inclusive). */
+  endLine: number;
+}
+
+/** An assistant answer: text with `[n]` markers plus the resolved citations. */
+export interface ChatAnswer {
+  /** Answer text containing `[n]` citation markers. */
+  text: string;
+  /** Citations resolved from the `[n]` markers, sorted by `n`. */
+  citations: Citation[];
+  /** Retrieved chunks used as context, in rank order (`[n]` refers to `sources[n - 1]`). */
+  sources: SearchResult[];
+}
+
+/** Request sent to an LLM provider: the conversation plus the retrieved context. */
+export interface CompletionRequest {
+  /** Conversation so far, oldest first. */
+  messages: ChatMessage[];
+  /** Retrieved context chunks in rank order; `[n]` in the answer refers to `context[n - 1]`. */
+  context: SearchResult[];
+}
+
+/** Response returned by an LLM provider. */
+export interface CompletionResponse {
+  /** Answer text; may contain `[n]` markers referring to the request's context. */
+  text: string;
+}
